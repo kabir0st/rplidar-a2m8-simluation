@@ -4,7 +4,7 @@ A 2D RPLidar A2M8 simulator with a live, paint-as-you-go world editor. Streams r
 
 ## Why I built it
 
-I was working on a scan-matching algorithm (scan_cox) for my robotics class and didn't have a lidar yet. Replaying the same recorded `.bag` file over and over wasn't cutting it — every tweak to the algorithm wanted a fresh scan against a slightly different scene, and I couldn't get one. So instead of waiting on hardware, I wrote this: an editable 2D arena that ray-casts a 360-degree scan and ships it out in the same wire format an A2M8 driver expects. Point your algorithm at `127.0.0.1` and it doesn't know the difference.
+I was working on a scan-matching algorithm (scan_cox) for my robotics class and didn't have a lidar yet. Replaying the same recorded `.bag` file over and over wasn't cutting it, every tweak to the algorithm wanted a fresh scan against a slightly different scene, and I couldn't get one. So instead of waiting on hardware, I wrote this: an editable 2D arena that ray-casts a 360-degree scan and ships it out in the same wire format an A2M8 driver expects. Point your algorithm at `127.0.0.1` and it doesn't know the difference.
 
 ## What it does
 
@@ -20,7 +20,7 @@ I was working on a scan-matching algorithm (scan_cox) for my robotics class and 
 *Boxes mode: rectangular obstacles painted into the scene get raycast in real time.*
 
 ![Walls mode](images/wall.png)
-*Walls mode: free-hand line segments — useful for hallway / loop-closure SLAM tests.*
+*Walls mode: free-hand line segments, useful for hallway / loop-closure SLAM tests.*
 
 ## Run it
 
@@ -51,6 +51,6 @@ For the full picture see the docs.
 
 ## Docs
 
-- [docs/scans.md](docs/scans.md) — what a single reading contains: fields, units, ranges, noise/quality model, how to assemble a full 360-degree scan.
-- [docs/protocol.md](docs/protocol.md) — the wire format: TCP ports, frame header, sample bitfields, decode formulas.
-- [docs/integration.md](docs/integration.md) — plugging the simulator into a SLAM / scan-matching pipeline, with a complete reference client.
+- [docs/scans.md](docs/scans.md), what a single reading contains: fields, units, ranges, noise/quality model, how to assemble a full 360-degree scan.
+- [docs/protocol.md](docs/protocol.md), the wire format: TCP ports, frame header, sample bitfields, decode formulas.
+- [docs/integration.md](docs/integration.md), plugging the simulator into a SLAM / scan-matching pipeline, with a complete reference client.

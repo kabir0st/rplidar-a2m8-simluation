@@ -7,7 +7,7 @@ See [`../README.md`](../README.md) for the overview, [protocol.md](protocol.md) 
 ## Workflow
 
 1. Run `python main.py` in one terminal.
-2. Use the GUI to lay out the scene you want — drag the lidar, paint walls/boxes, clear and re-paint between trials.
+2. Use the GUI to lay out the scene you want, drag the lidar, paint walls/boxes, clear and re-paint between trials.
 3. From your algorithm: bind a listener on `127.0.0.1:9888`, then send `START` (`0x10 0x00`) to `127.0.0.1:9887`. The simulator dials in to your listener and starts streaming.
 4. Decode frames per [protocol.md](protocol.md), accumulate samples until `is_new_scan` per [scans.md](scans.md), and feed each completed scan into your algorithm.
 5. Send `STOP` (`0x20 0x00`) when done.
@@ -98,15 +98,15 @@ Filter on `quality > 0` to drop the "no return" samples. If your algorithm assum
 
 ## Testing patterns
 
-- **Loop closure stress test** — use Walls mode to draw a closed corridor that returns to the start. Move the lidar around the loop between scans (each move = a fake odometry step) and watch whether your algorithm closes the loop.
-- **Feature-poor scenes** — clear all obstacles. Pure rectangular arena will starve most scan matchers; useful for finding the failure mode.
-- **Feature-rich scenes** — pile boxes of varying sizes around the lidar. A clean baseline for ICP convergence.
-- **Range edge cases** — drop a wall right next to the lidar (under the 150 mm dead zone) or far enough away (>12 m would need a bigger arena, but 12 m max is the practical edge) to see how your code handles `distance_mm == 0` markers.
-- **Ground truth** — the simulator's "true" sensor pose is just `(lidar_x, lidar_y) * 10 mm`. Read it off the canvas, compare to whatever pose your SLAM estimator produces.
+- **Loop closure stress test**, use Walls mode to draw a closed corridor that returns to the start. Move the lidar around the loop between scans (each move = a fake odometry step) and watch whether your algorithm closes the loop.
+- **Feature-poor scenes**, clear all obstacles. Pure rectangular arena will starve most scan matchers; useful for finding the failure mode.
+- **Feature-rich scenes**, pile boxes of varying sizes around the lidar. A clean baseline for ICP convergence.
+- **Range edge cases**, drop a wall right next to the lidar (under the 150 mm dead zone) or far enough away (>12 m would need a bigger arena, but 12 m max is the practical edge) to see how your code handles `distance_mm == 0` markers.
+- **Ground truth**, the simulator's "true" sensor pose is just `(lidar_x, lidar_y) * 10 mm`. Read it off the canvas, compare to whatever pose your SLAM estimator produces.
 
 ## Caveats
 
 - The simulator is 2D only. There is no roll/pitch/elevation channel.
 - Scan rate is fixed at the parameters in [`../libs/server.py`](../libs/server.py); change the constants there if you need a different cadence.
-- The lidar pose is updated through the GUI, not the network — there's no API for an external program to teleport it. If your test loop needs that, automate the GUI or extend `World` with a network setter.
+- The lidar pose is updated through the GUI, not the network, there's no API for an external program to teleport it. If your test loop needs that, automate the GUI or extend `World` with a network setter.
 - One client at a time. The data port accepts a single inbound connection per `START`.

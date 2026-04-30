@@ -49,7 +49,7 @@ base   = QUALITY_MAX - (QUALITY_MAX - QUALITY_MIN) * (distance / LIDAR_MAX_MM)
 qual   = round(base + uniform(-2, +2))   # clamped to [QUALITY_MIN, QUALITY_MAX]
 ```
 
-with `QUALITY_MAX = 47` and `QUALITY_MIN = 12`. Most SLAM front-ends just want a non-zero quality as a "valid" check — anything `> 0` is a real return.
+with `QUALITY_MAX = 47` and `QUALITY_MIN = 12`. Most SLAM front-ends just want a non-zero quality as a "valid" check, anything `> 0` is a real return.
 
 ## Assembling a full scan
 
@@ -64,10 +64,10 @@ The protocol is sample-stream-based, not frame-based. To build a 360-degree scan
 
 ## Coordinate convention
 
-The lidar position is a pixel coordinate inside an 800x600 canvas (Tkinter's coordinate system, y-down). Angle 0 points right (+x), and angles increase clockwise as drawn on screen because of the y-flip. If you're feeding the scan into a SLAM algorithm that assumes a standard math convention (y-up, CCW positive), either negate the angles or flip y after the polar-to-Cartesian conversion. The simulator's ground-truth pose is just `(lidar_x, lidar_y) * MM_PER_PIXEL` (with `MM_PER_PIXEL = 10`) — handy for evaluating estimators.
+The lidar position is a pixel coordinate inside an 800x600 canvas (Tkinter's coordinate system, y-down). Angle 0 points right (+x), and angles increase clockwise as drawn on screen because of the y-flip. If you're feeding the scan into a SLAM algorithm that assumes a standard math convention (y-up, CCW positive), either negate the angles or flip y after the polar-to-Cartesian conversion. The simulator's ground-truth pose is just `(lidar_x, lidar_y) * MM_PER_PIXEL` (with `MM_PER_PIXEL = 10`), handy for evaluating estimators.
 
 ## Where to look in the code
 
-- Sample generation and noise: [`../libs/server.py`](../libs/server.py) — `_stream_loop` and `_quality_for_distance`.
-- Ray-casting: [`../libs/geometry.py`](../libs/geometry.py) — 2D segment-intersection used for every sample.
-- Encoding to bytes: [`../libs/protocol.py`](../libs/protocol.py) — see [protocol.md](protocol.md) for the bitfields.
+- Sample generation and noise: [`../libs/server.py`](../libs/server.py), `_stream_loop` and `_quality_for_distance`.
+- Ray-casting: [`../libs/geometry.py`](../libs/geometry.py), 2D segment-intersection used for every sample.
+- Encoding to bytes: [`../libs/protocol.py`](../libs/protocol.py), see [protocol.md](protocol.md) for the bitfields.

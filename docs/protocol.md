@@ -8,10 +8,10 @@ See [scans.md](scans.md) for what to do with a sample once it's decoded, and [`.
 
 | Direction | Host | Port | Role |
 |-----------|------|------|------|
-| Client connects in | `127.0.0.1` | `9887` | **Control** — send `START` / `STOP` here. |
-| Simulator connects out | `127.0.0.1` | `9888` | **Data** — your code must be **listening** on this port. |
+| Client connects in | `127.0.0.1` | `9887` | **Control**, send `START` / `STOP` here. |
+| Simulator connects out | `127.0.0.1` | `9888` | **Data**, your code must be **listening** on this port. |
 
-The data socket is reversed from a normal client/server — when you send `START`, the simulator opens an outbound TCP connection to your listener. Bind 9888 *before* sending `START`.
+The data socket is reversed from a normal client/server, when you send `START`, the simulator opens an outbound TCP connection to your listener. Bind 9888 *before* sending `START`.
 
 ## Control commands
 
@@ -86,10 +86,10 @@ def read_frame(sock):
     return [decode_sample(payload[i:i+5]) for i in range(0, size, 5)]
 ```
 
-`recv_exactly` is your usual loop around `sock.recv` until N bytes have been collected — `recv` can return fewer bytes than asked for on TCP.
+`recv_exactly` is your usual loop around `sock.recv` until N bytes have been collected, `recv` can return fewer bytes than asked for on TCP.
 
 ## Compatibility notes
 
 - The framing and sample bitfields match the RPLidar A2M8 standard scan response, so any A2M8 parser should drop in with only the transport swapped (TCP socket instead of serial port).
-- Express-mode and other A-series extensions are **not** implemented — the simulator only emits standard scan samples.
-- There's no health/info command — the control socket only handles `START` / `STOP`.
+- Express-mode and other A-series extensions are **not** implemented, the simulator only emits standard scan samples.
+- There's no health/info command, the control socket only handles `START` / `STOP`.
