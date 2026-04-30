@@ -117,8 +117,8 @@ class LidarServer:
                 if is_new_scan:
                     angle -= 360
 
-                lx, ly, segs = self.world.snapshot()
-                ang_rad = math.radians(emit_angle)
+                lx, ly, heading_deg, segs = self.world.snapshot()
+                ang_rad = math.radians(emit_angle + heading_deg)
                 dist_pix = cast_ray(lx, ly, ang_rad, segs, max_pixels)
                 true_mm = dist_pix * self.mm_per_pixel
 

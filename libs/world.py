@@ -13,6 +13,7 @@ class World:
         self.height = height
         self.lidar_x = width / 2
         self.lidar_y = height / 2
+        self.heading_deg = 0.0
         # Each obstacle is a tuple (x1, y1, x2, y2). Boxes are stored as 4 segs.
         self.obstacles = []
         self._lock = threading.Lock()
@@ -48,11 +49,16 @@ class World:
             self.lidar_x = max(1, min(self.width - 1, x))
             self.lidar_y = max(1, min(self.height - 1, y))
 
+    def set_heading(self, deg):
+        with self._lock:
+            self.heading_deg = float(deg) % 360.0
+
     def snapshot(self):
-        """Return a thread-safe copy of (lidar_x, lidar_y, all_segments)."""
+        """Return a thread-safe copy of (lidar_x, lidar_y, heading_deg, all_segments)."""
         with self._lock:
             return (
                 self.lidar_x,
                 self.lidar_y,
+                self.heading_deg,
                 self._arena_segments() + list(self.obstacles),
             )

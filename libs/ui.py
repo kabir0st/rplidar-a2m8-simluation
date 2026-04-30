@@ -48,6 +48,16 @@ class SimUI:
         tk.Button(bar, text="Clear obstacles", command=self._on_clear).pack(
             side=tk.LEFT, padx=8
         )
+        tk.Label(bar, text="Heading °").pack(side=tk.LEFT)
+        self.heading_scale = tk.Scale(
+            bar, from_=0, to=359, orient=tk.HORIZONTAL, length=200,
+            resolution=1, showvalue=True, command=self._on_heading,
+        )
+        self.heading_scale.pack(side=tk.LEFT)
+
+    def _on_heading(self, value):
+        self.world.set_heading(float(value))
+        self._redraw()
 
     def _on_clear(self):
         self.world.clear()
@@ -122,14 +132,29 @@ class SimUI:
         self._draw_rays()
 
     def _draw_rays(self):
-        lx, ly, segs = self.world.snapshot()
+        lx, ly, heading_deg, segs = self.world.snapshot()
         max_pixels = 12000 / self.mm_per_pixel
         for deg in range(0, 360, RAY_PREVIEW_STEP_DEG):
-            ang = math.radians(deg)
+            ang = math.radians(deg + heading_deg)
             d = cast_ray(lx, ly, ang, segs, max_pixels)
             ex = lx + d * math.cos(ang)
             ey = ly + d * math.sin(ang)
             self.canvas.create_line(lx, ly, ex, ey, fill="#a8d8ff")
+
+        # 0° heading marker: red arrow showing which side of the device is 0°.
+        zero_ang = math.radians(heading_deg)
+        marker_len = 40
+        zx = lx + marker_len * math.cos(zero_ang)
+        zy = ly + marker_len * math.sin(zero_ang)
+        self.canvas.create_line(
+            lx, ly, zx, zy, fill="red", width=3, arrow=tk.LAST,
+        )
+        self.canvas.create_text(
+            lx + (marker_len + 12) * math.cos(zero_ang),
+            ly + (marker_len + 12) * math.sin(zero_ang),
+            text="0°", fill="red", font=("TkDefaultFont", 9, "bold"),
+        )
+
         self.canvas.create_oval(
             lx - LIDAR_RADIUS, ly - LIDAR_RADIUS,
             lx + LIDAR_RADIUS, ly + LIDAR_RADIUS,
