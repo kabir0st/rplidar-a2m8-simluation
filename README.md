@@ -8,8 +8,9 @@ I was working on a scan-matching algorithm (scan_cox) for my robotics class and 
 
 ## What it does
 
-- 800x600 px arena (8 m x 6 m at 10 mm/px) with a movable lidar.
-- Live editor: drag the lidar around, paint rectangular boxes, draw line walls, clear the scene.
+- 800x600 px arena (8 m x 6 m at 10 mm/px) with a movable, rotatable lidar.
+- Live editor: drag the lidar around, rotate its heading with a slider, paint rectangular boxes, draw line walls, clear the scene.
+- A red 0° arrow on the lidar shows which side of the device is the zero-degree heading, so you can tell at a glance how streamed sample angles map onto the scene.
 - 360 samples/scan at 1-degree resolution, ~1.8 Hz, with a Gaussian noise model and a 6-bit quality byte.
 - TCP control + data sockets that mimic the RPLidar A2M8 binary protocol.
 
