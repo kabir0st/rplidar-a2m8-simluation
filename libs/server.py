@@ -19,24 +19,34 @@ CONTROL_PORT = 9887
 DATA_HOST = "127.0.0.1"
 DATA_PORT = 9888
 
-SAMPLE_PERIOD = 0.005   # ~200 samples/s -> ~1.8 scans/s at 1 deg step
-ANGLE_STEP = 1.0
+SAMPLE_PERIOD = 0.003   # ~180 samples/scan at 2 deg step -> ~1.8 scans/s
 LIDAR_MIN_MM = 150       # A2M8 minimum range
 LIDAR_MAX_MM = 12000     # A2M8 maximum range
 
 # A2M8-ish noise model: floor at close range, +1% of distance further out.
 NOISE_FLOOR_MM = 10.0
 NOISE_PROPORTIONAL = 0.01
-# 6-bit quality byte (0..63). Indoor surfaces typically land in this band.
-QUALITY_MAX = 47
-QUALITY_MIN = 12
+
+# Angle stepping mirrors the empirical distribution seen in real captures:
+# ~82% +2 deg, ~12% +4 deg, ~4% repeat, ~2% +6 deg.
+ANGLE_STEP_CHOICES = (
+    (2,) * 41 + (4,) * 6 + (0,) * 2 + (6,) * 1
+)
+
+# Quality byte is overwhelmingly 15 in real captures, with a thin tail.
+QUALITY_TYPICAL = 15
+QUALITY_TAIL = (11, 12, 13, 14, 22)
+QUALITY_TAIL_PROB = 0.01
+
+# Fraction of rays that *would* return a valid distance but the device
+# reports distance=0 anyway (dropouts mid-arc, ~30% in the real capture).
+DROPOUT_PROB = 0.30
 
 
-def _quality_for_distance(distance_mm, max_mm):
-    t = max(0.0, min(1.0, distance_mm / max_mm))
-    base = QUALITY_MAX - (QUALITY_MAX - QUALITY_MIN) * t
-    jitter = random.uniform(-2.0, 2.0)
-    return max(QUALITY_MIN, min(QUALITY_MAX, int(round(base + jitter))))
+def _quality_sample():
+    if random.random() < QUALITY_TAIL_PROB:
+        return random.choice(QUALITY_TAIL)
+    return QUALITY_TYPICAL
 
 
 class LidarServer:
@@ -98,17 +108,17 @@ class LidarServer:
         print(f"[lidar-sim] streaming to {DATA_HOST}:{DATA_PORT}")
 
         max_pixels = LIDAR_MAX_MM / self.mm_per_pixel
-        angle = 0.0
+        angle = 0
         try:
             while not self._stop_event.is_set():
-                prev_angle = angle
-                angle += ANGLE_STEP
-                is_new_scan = angle >= 360.0
+                emit_angle = angle
+                angle += random.choice(ANGLE_STEP_CHOICES)
+                is_new_scan = angle >= 360
                 if is_new_scan:
-                    angle -= 360.0
+                    angle -= 360
 
                 lx, ly, segs = self.world.snapshot()
-                ang_rad = math.radians(prev_angle)
+                ang_rad = math.radians(emit_angle)
                 dist_pix = cast_ray(lx, ly, ang_rad, segs, max_pixels)
                 true_mm = dist_pix * self.mm_per_pixel
 
@@ -118,13 +128,18 @@ class LidarServer:
                 else:
                     sigma = max(NOISE_FLOOR_MM, NOISE_PROPORTIONAL * true_mm)
                     noisy = random.gauss(true_mm, sigma)
-                    dist_mm = max(
-                        float(LIDAR_MIN_MM), min(float(LIDAR_MAX_MM), noisy)
+                    clamped = max(
+                        float(LIDAR_MIN_MM),
+                        min(float(LIDAR_MAX_MM), noisy),
                     )
-                    quality = _quality_for_distance(dist_mm, LIDAR_MAX_MM)
+                    quality = _quality_sample()
+                    if random.random() < DROPOUT_PROB:
+                        dist_mm = 0.0
+                    else:
+                        dist_mm = float(round(clamped))
 
                 packet = frame_packet(
-                    encode_sample(quality, prev_angle, dist_mm, is_new_scan)
+                    encode_sample(quality, emit_angle, dist_mm, is_new_scan)
                 )
                 sock.sendall(packet)
                 time.sleep(SAMPLE_PERIOD)

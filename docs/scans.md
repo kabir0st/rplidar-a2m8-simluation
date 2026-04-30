@@ -1,6 +1,6 @@
 # What a reading contains
 
-Every tick the simulator emits one **sample**. A full **scan** is 360 of those samples laid end-to-end at 1-degree spacing. This doc describes the meaning of a sample once you've decoded it; for the byte-level layout see [protocol.md](protocol.md).
+Every tick the simulator emits one **sample**. A full **scan** is roughly 180 of those samples spread across 360 degrees at a nominal 2-degree step (with occasional repeats and 4-/6-degree skips, mirroring the real device). This doc describes the meaning of a sample once you've decoded it; for the byte-level layout see [protocol.md](protocol.md).
 
 See [`../README.md`](../README.md) for the high-level pitch.
 
@@ -8,9 +8,9 @@ See [`../README.md`](../README.md) for the high-level pitch.
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `angle_deg` | float, 0.0–359.984 | Bearing of the ray, measured CCW from the +x axis in **canvas coordinates** (y-down). |
-| `distance_mm` | float, 0.0 or 150.0–12000.0 | Range to the nearest obstacle along the ray. `0.0` means "no return" (out of range, blocked, or below the 150 mm dead zone). |
-| `quality` | int, 0–63 | Confidence-style byte. `0` = invalid; otherwise lands in the 12–47 band in this simulator. |
+| `angle_deg` | int (even), 0–358 | Bearing of the ray, measured CCW from the +x axis in **canvas coordinates** (y-down). Emitted at 2-degree resolution to match the real device. |
+| `distance_mm` | int, 0 or 150–12000 | Range to the nearest obstacle along the ray. `0` means "no return" (out of range, blocked, below the 150 mm dead zone, or a random dropout). |
+| `quality` | int, 0–63 | Confidence-style byte. `0` = invalid; valid returns are almost always `15`, with a thin tail at 11–14 and 22, matching real captures. |
 | `is_new_scan` | bool | `True` on the first sample of a fresh 360-degree sweep, `False` otherwise. |
 
 ## Ranges and limits
@@ -18,16 +18,18 @@ See [`../README.md`](../README.md) for the high-level pitch.
 The simulator faithfully models the RPLidar A2M8 working envelope (see [`../libs/server.py`](../libs/server.py)):
 
 ```
-LIDAR_MIN_MM = 150
-LIDAR_MAX_MM = 12000
-SAMPLE_PERIOD = 0.005  # 200 samples/s
-ANGLE_STEP   = 1.0     # degrees
+LIDAR_MIN_MM   = 150
+LIDAR_MAX_MM   = 12000
+SAMPLE_PERIOD  = 0.003   # ~330 samples/s
+ANGLE_STEP_CHOICES = (0, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 6)
 ```
 
 That gives:
-- ~200 samples/s, ~1.8 full scans/s.
-- Returns in the range `[150 mm, 12000 mm]` get reported with their measured (noisy) distance.
-- Anything closer than 150 mm or beyond the 12 m max returns `distance_mm = 0.0` and `quality = 0`.
+- ~330 samples/s, ~1.8 full scans/s (~180 samples per scan).
+- Angle deltas drawn from the empirical distribution: ~82% +2°, ~12% +4°, ~4% repeats (0°), ~2% +6°.
+- Returns in the range `[150 mm, 12000 mm]` get reported with their measured (noisy, integer-rounded) distance.
+- Anything closer than 150 mm or beyond the 12 m max returns `distance_mm = 0` and `quality = 0`.
+- Even within a valid arc, ~30% of would-be returns drop out with `distance_mm = 0` while keeping a non-zero quality — same intermittent-zero pattern visible in real captures.
 
 ## Noise model
 
@@ -42,14 +44,15 @@ with `NOISE_FLOOR_MM = 10.0` and `NOISE_PROPORTIONAL = 0.01`. So expect roughly 
 
 ## Quality model
 
-Quality drops linearly with distance, with a small jitter:
+Quality is a narrow band centered on `15`, matching what the A2M8 actually emits in practice:
 
 ```
-base   = QUALITY_MAX - (QUALITY_MAX - QUALITY_MIN) * (distance / LIDAR_MAX_MM)
-qual   = round(base + uniform(-2, +2))   # clamped to [QUALITY_MIN, QUALITY_MAX]
+QUALITY_TYPICAL  = 15
+QUALITY_TAIL     = (11, 12, 13, 14, 22)
+QUALITY_TAIL_PROB = 0.01     # 1% of valid returns land in the tail
 ```
 
-with `QUALITY_MAX = 47` and `QUALITY_MIN = 12`. Most SLAM front-ends just want a non-zero quality as a "valid" check, anything `> 0` is a real return.
+So ~99% of valid returns carry quality `15`, the rest land in the small tail. Most SLAM front-ends just want a non-zero quality as a "valid" check, anything `> 0` is a real return.
 
 ## Assembling a full scan
 
