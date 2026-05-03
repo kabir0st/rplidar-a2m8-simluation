@@ -23,9 +23,9 @@ SAMPLE_PERIOD = 0.003   # ~180 samples/scan at 2 deg step -> ~1.8 scans/s
 LIDAR_MIN_MM = 150       # A2M8 minimum range
 LIDAR_MAX_MM = 12000     # A2M8 maximum range
 
-# A2M8-ish noise model: floor at close range, +1% of distance further out.
-NOISE_FLOOR_MM = 10.0
-NOISE_PROPORTIONAL = 0.01
+# Noise grows with distance: at the lidar's max range the effective sigma
+# is (1 + NOISE_RANGE_GAIN) * slider. At slider=0 there is no noise at all.
+NOISE_RANGE_GAIN = 0.5
 
 # Angle stepping mirrors the empirical distribution seen in real captures:
 # ~82% +2 deg, ~12% +4 deg, ~4% repeat, ~2% +6 deg.
@@ -37,11 +37,6 @@ ANGLE_STEP_CHOICES = (
 QUALITY_TYPICAL = 15
 QUALITY_TAIL = (11, 12, 13, 14, 22)
 QUALITY_TAIL_PROB = 0.01
-
-# Fraction of rays that *would* return a valid distance but the device
-# reports distance=0 anyway (dropouts mid-arc, ~30% in the real capture).
-DROPOUT_PROB = 0.30
-
 
 def _quality_sample():
     if random.random() < QUALITY_TAIL_PROB:
@@ -117,7 +112,7 @@ class LidarServer:
                 if is_new_scan:
                     angle -= 360
 
-                lx, ly, heading_deg, segs = self.world.snapshot()
+                lx, ly, heading_deg, noise_sigma_mm, segs = self.world.snapshot()
                 ang_rad = math.radians(emit_angle + heading_deg)
                 dist_pix = cast_ray(lx, ly, ang_rad, segs, max_pixels)
                 true_mm = dist_pix * self.mm_per_pixel
@@ -126,17 +121,18 @@ class LidarServer:
                     dist_mm = 0.0
                     quality = 0
                 else:
-                    sigma = max(NOISE_FLOOR_MM, NOISE_PROPORTIONAL * true_mm)
-                    noisy = random.gauss(true_mm, sigma)
+                    sigma = noise_sigma_mm * (
+                        1.0 + NOISE_RANGE_GAIN * true_mm / LIDAR_MAX_MM
+                    )
+                    noisy = (
+                        random.gauss(true_mm, sigma) if sigma > 0 else true_mm
+                    )
                     clamped = max(
                         float(LIDAR_MIN_MM),
                         min(float(LIDAR_MAX_MM), noisy),
                     )
                     quality = _quality_sample()
-                    if random.random() < DROPOUT_PROB:
-                        dist_mm = 0.0
-                    else:
-                        dist_mm = float(round(clamped))
+                    dist_mm = float(round(clamped))
 
                 packet = frame_packet(
                     encode_sample(quality, emit_angle, dist_mm, is_new_scan)

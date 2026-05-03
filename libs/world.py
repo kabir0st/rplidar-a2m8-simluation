@@ -14,6 +14,7 @@ class World:
         self.lidar_x = width / 2
         self.lidar_y = height / 2
         self.heading_deg = 0.0
+        self.noise_sigma_mm = 10.0
         # Each obstacle is a tuple (x1, y1, x2, y2). Boxes are stored as 4 segs.
         self.obstacles = []
         self._lock = threading.Lock()
@@ -53,12 +54,17 @@ class World:
         with self._lock:
             self.heading_deg = float(deg) % 360.0
 
+    def set_noise_sigma(self, mm):
+        with self._lock:
+            self.noise_sigma_mm = max(0.0, float(mm))
+
     def snapshot(self):
-        """Return a thread-safe copy of (lidar_x, lidar_y, heading_deg, all_segments)."""
+        """Return a thread-safe copy of (lidar_x, lidar_y, heading_deg, noise_sigma_mm, all_segments)."""
         with self._lock:
             return (
                 self.lidar_x,
                 self.lidar_y,
                 self.heading_deg,
+                self.noise_sigma_mm,
                 self._arena_segments() + list(self.obstacles),
             )

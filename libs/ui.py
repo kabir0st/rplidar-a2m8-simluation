@@ -55,9 +55,20 @@ class SimUI:
         )
         self.heading_scale.pack(side=tk.LEFT)
 
+        tk.Label(bar, text="Noise σ (mm)").pack(side=tk.LEFT)
+        self.sigma_scale = tk.Scale(
+            bar, from_=0, to=100, orient=tk.HORIZONTAL, length=200,
+            resolution=1, showvalue=True, command=self._on_sigma,
+        )
+        self.sigma_scale.set(int(self.world.noise_sigma_mm))
+        self.sigma_scale.pack(side=tk.LEFT)
+
     def _on_heading(self, value):
         self.world.set_heading(float(value))
         self._redraw()
+
+    def _on_sigma(self, value):
+        self.world.set_noise_sigma(float(value))
 
     def _on_clear(self):
         self.world.clear()
@@ -132,7 +143,7 @@ class SimUI:
         self._draw_rays()
 
     def _draw_rays(self):
-        lx, ly, heading_deg, segs = self.world.snapshot()
+        lx, ly, heading_deg, _sigma, segs = self.world.snapshot()
         max_pixels = 12000 / self.mm_per_pixel
         for deg in range(0, 360, RAY_PREVIEW_STEP_DEG):
             ang = math.radians(deg + heading_deg)
