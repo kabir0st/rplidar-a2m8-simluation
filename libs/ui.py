@@ -15,6 +15,7 @@ class SimUI:
         self.world = world
         self.mm_per_pixel = mm_per_pixel
         self.mode = tk.StringVar(value="lidar")
+        self.coord_frame = tk.StringVar(value="world")
 
         self._build_toolbar(root)
         self.canvas = tk.Canvas(
@@ -62,6 +63,17 @@ class SimUI:
         )
         self.sigma_scale.set(int(self.world.noise_sigma_mm))
         self.sigma_scale.pack(side=tk.LEFT)
+
+        self.frame_button = tk.Button(
+            bar, text="Frame: World", command=self._on_toggle_frame,
+        )
+        self.frame_button.pack(side=tk.LEFT, padx=8)
+
+    def _on_toggle_frame(self):
+        new_frame = "lidar" if self.coord_frame.get() == "world" else "world"
+        self.coord_frame.set(new_frame)
+        self.frame_button.config(text=f"Frame: {new_frame.capitalize()}")
+        self._redraw()
 
     def _on_heading(self, value):
         self.world.set_heading(float(value))
@@ -129,21 +141,44 @@ class SimUI:
             self._redraw()
         self.canvas.after(PREVIEW_REFRESH_MS, self._tick)
 
+    def _to_display_mm(self, px, py, lidar_pose):
+        lx, ly, heading_deg, *_ = lidar_pose
+        if self.coord_frame.get() == "lidar":
+            dx = (px - lx) * self.mm_per_pixel
+            dy = (py - ly) * self.mm_per_pixel
+            ang = -math.radians(heading_deg)
+            x = dx * math.cos(ang) - dy * math.sin(ang)
+            y = dx * math.sin(ang) + dy * math.cos(ang)
+            return x, y
+        return px * self.mm_per_pixel, py * self.mm_per_pixel
+
     def _redraw(self):
         self.canvas.delete("all")
+        pose = self.world.snapshot()
         # Arena border
         self.canvas.create_rectangle(
             1, 1, self.world.width - 1, self.world.height - 1,
             outline="black", width=2,
         )
-        # Obstacles
+        # Obstacles + endpoint labels
+        labeled = set()
         for x1, y1, x2, y2 in self.world.obstacles:
             self.canvas.create_line(x1, y1, x2, y2, fill="#444", width=2)
+            for px, py in ((x1, y1), (x2, y2)):
+                key = (round(px, 1), round(py, 1))
+                if key in labeled:
+                    continue
+                labeled.add(key)
+                mx, my = self._to_display_mm(px, py, pose)
+                self.canvas.create_text(
+                    px, py - 8, text=f"({mx:.0f},{my:.0f})",
+                    fill="#666", font=("TkDefaultFont", 8), anchor="s",
+                )
         # Lidar rays + dot
-        self._draw_rays()
+        self._draw_rays(pose)
 
-    def _draw_rays(self):
-        lx, ly, heading_deg, _sigma, segs = self.world.snapshot()
+    def _draw_rays(self, pose):
+        lx, ly, heading_deg, _sigma, segs = pose
         max_pixels = 12000 / self.mm_per_pixel
         for deg in range(0, 360, RAY_PREVIEW_STEP_DEG):
             ang = math.radians(deg + heading_deg)
