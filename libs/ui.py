@@ -160,7 +160,9 @@ class SimUI:
             1, 1, self.world.width - 1, self.world.height - 1,
             outline="black", width=2,
         )
-        # Obstacles + endpoint labels
+        # Obstacles + endpoint labels (labels go above lidar-y, below lidar-y
+        # so they sit clear of the ray fan).
+        lidar_y = pose[1]
         labeled = set()
         for x1, y1, x2, y2 in self.world.obstacles:
             self.canvas.create_line(x1, y1, x2, y2, fill="#444", width=2)
@@ -170,9 +172,13 @@ class SimUI:
                     continue
                 labeled.add(key)
                 mx, my = self._to_display_mm(px, py, pose)
+                if py < lidar_y:
+                    text_y, anchor = py - 8, "s"
+                else:
+                    text_y, anchor = py + 8, "n"
                 self.canvas.create_text(
-                    px, py - 8, text=f"({mx:.0f},{my:.0f})",
-                    fill="#666", font=("TkDefaultFont", 8), anchor="s",
+                    px, text_y, text=f"({mx:.0f},{my:.0f})",
+                    fill="#666", font=("TkDefaultFont", 8), anchor=anchor,
                 )
         # Lidar rays + dot
         self._draw_rays(pose)
