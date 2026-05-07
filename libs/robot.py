@@ -68,6 +68,18 @@ class Robot:
         self.y_px = height_px / 2.0
         self.theta_rad = 0.0
 
+        # Global-map origin: snapshot of the lidar's starting pose. Global
+        # pose is reported as (current_lidar - this) so the lidar reads
+        # (0, 0, 0) at sim startup.
+        offset_px = LIDAR_OFFSET_MM / mm_per_pixel
+        self._origin_lidar_x_px = (
+            self.x_px + offset_px * math.cos(self.theta_rad)
+        )
+        self._origin_lidar_y_px = (
+            self.y_px + offset_px * math.sin(self.theta_rad)
+        )
+        self._origin_theta_rad = self.theta_rad
+
         # TX state (commanded; mirrors TYPE_White_Board_TX from spi_com.h).
         self.mode = "speed"            # "speed" or "pwm"
         self.set_speed_m0 = 0          # left
@@ -127,6 +139,20 @@ class Robot:
             ly = self.y_px + offset_px * math.sin(self.theta_rad)
             heading_deg = math.degrees(self.theta_rad) % 360.0
         return lx, ly, heading_deg
+
+    def get_global_pose(self):
+        """Return (x_mm, y_mm, theta_deg) of the lidar relative to its
+        starting position. +x/+y match canvas (y grows downward); theta
+        is heading delta from start, normalized to (-180, 180]."""
+        with self._lock:
+            offset_px = LIDAR_OFFSET_MM / self.mm_per_pixel
+            lx = self.x_px + offset_px * math.cos(self.theta_rad)
+            ly = self.y_px + offset_px * math.sin(self.theta_rad)
+            dx_mm = (lx - self._origin_lidar_x_px) * self.mm_per_pixel
+            dy_mm = (ly - self._origin_lidar_y_px) * self.mm_per_pixel
+            dtheta = math.degrees(self.theta_rad - self._origin_theta_rad)
+            dtheta = ((dtheta + 180.0) % 360.0) - 180.0
+        return dx_mm, dy_mm, dtheta
 
     def get_chassis_snapshot(self):
         """Pose + motor command/measurement values for UI rendering."""

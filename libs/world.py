@@ -73,6 +73,10 @@ class World:
     def stop_motors(self):
         self.robot.stop()
 
+    def get_global_pose(self):
+        """Lidar (x_mm, y_mm, theta_deg) relative to start position."""
+        return self.robot.get_global_pose()
+
     def snapshot(self):
         """Return a thread-safe copy of (lidar_x, lidar_y, heading_deg, noise_sigma_mm, all_segments)."""
         lidar_x, lidar_y, heading_deg = self.robot.get_lidar_pose()

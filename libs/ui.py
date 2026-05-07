@@ -37,6 +37,14 @@ class SimUI:
         )
         self.canvas.pack()
 
+        self.status_var = tk.StringVar(
+            value="Lidar global: x=+0.0 mm  y=+0.0 mm  θ=+0.00°"
+        )
+        tk.Label(
+            root, textvariable=self.status_var, anchor="w",
+            font=("TkFixedFont", 10), relief=tk.SUNKEN, padx=6,
+        ).pack(side=tk.TOP, fill=tk.X)
+
         self.canvas.bind("<Button-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
@@ -208,6 +216,12 @@ class SimUI:
             self._redraw()
         self.canvas.after(PREVIEW_REFRESH_MS, self._tick)
 
+    def _update_status(self):
+        x, y, th = self.world.get_global_pose()
+        self.status_var.set(
+            f"Lidar global: x={x:+8.1f} mm  y={y:+8.1f} mm  θ={th:+7.2f}°"
+        )
+
     def _to_display_mm(self, px, py, lidar_pose):
         lx, ly, heading_deg, *_ = lidar_pose
         if self.coord_frame.get() == "lidar":
@@ -251,6 +265,7 @@ class SimUI:
         self._draw_robot()
         # Lidar rays + dot
         self._draw_rays(pose)
+        self._update_status()
 
     def _local_to_canvas(self, cx_px, cy_px, theta, x_mm, y_mm):
         """Transform a point in robot-local mm coords to canvas pixels."""
