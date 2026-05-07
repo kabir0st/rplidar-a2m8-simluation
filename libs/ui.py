@@ -1,23 +1,36 @@
-"""Tkinter UI: arena canvas, draggable lidar, click-drag boxes/walls."""
+"""Tkinter UI: arena canvas, draggable robot, click-drag boxes/walls, motor controls."""
 
 import math
 import tkinter as tk
 
 from libs.geometry import cast_ray
+from libs.robot import (
+    CHASSIS_LENGTH_MM,
+    CHASSIS_WIDTH_MM,
+    LIDAR_OFFSET_MM,
+    WHEEL_DIAMETER_MM,
+    WHEELBASE_MM,
+)
 
 LIDAR_RADIUS = 7
 RAY_PREVIEW_STEP_DEG = 6      # draw every Nth ray on screen
 PREVIEW_REFRESH_MS = 100
+
+MOTOR_STEP = 10               # Set_Speed units per +/- click
 
 
 class SimUI:
     def __init__(self, root, world, mm_per_pixel):
         self.world = world
         self.mm_per_pixel = mm_per_pixel
-        self.mode = tk.StringVar(value="lidar")
+        self.mode = tk.StringVar(value="robot")
         self.coord_frame = tk.StringVar(value="world")
+        self.motors_linked = False
+        self.set_speed_l = tk.IntVar(value=0)
+        self.set_speed_r = tk.IntVar(value=0)
 
         self._build_toolbar(root)
+        self._build_motor_bar(root)
         self.canvas = tk.Canvas(
             root, width=world.width, height=world.height, bg="white",
             highlightthickness=0,
@@ -38,7 +51,7 @@ class SimUI:
         bar = tk.Frame(root)
         bar.pack(side=tk.TOP, fill=tk.X)
         modes = [
-            ("Move Lidar", "lidar"),
+            ("Move Robot", "robot"),
             ("Add Box", "box"),
             ("Build Wall", "wall"),
         ]
@@ -69,6 +82,60 @@ class SimUI:
         )
         self.frame_button.pack(side=tk.LEFT, padx=8)
 
+    def _build_motor_bar(self, root):
+        bar = tk.Frame(root)
+        bar.pack(side=tk.TOP, fill=tk.X, pady=(2, 4))
+
+        tk.Label(bar, text="Motor L").pack(side=tk.LEFT, padx=(4, 2))
+        tk.Button(bar, text="−", width=2,
+                  command=lambda: self._bump_motor("L", -MOTOR_STEP)).pack(side=tk.LEFT)
+        tk.Label(bar, textvariable=self.set_speed_l, width=6,
+                 relief=tk.SUNKEN, anchor="e").pack(side=tk.LEFT, padx=2)
+        tk.Button(bar, text="+", width=2,
+                  command=lambda: self._bump_motor("L", +MOTOR_STEP)).pack(side=tk.LEFT)
+
+        self.link_button = tk.Button(
+            bar, text="Link: OFF", width=10, command=self._on_toggle_link,
+        )
+        self.link_button.pack(side=tk.LEFT, padx=12)
+
+        tk.Label(bar, text="Motor R").pack(side=tk.LEFT, padx=(4, 2))
+        tk.Button(bar, text="−", width=2,
+                  command=lambda: self._bump_motor("R", -MOTOR_STEP)).pack(side=tk.LEFT)
+        tk.Label(bar, textvariable=self.set_speed_r, width=6,
+                 relief=tk.SUNKEN, anchor="e").pack(side=tk.LEFT, padx=2)
+        tk.Button(bar, text="+", width=2,
+                  command=lambda: self._bump_motor("R", +MOTOR_STEP)).pack(side=tk.LEFT)
+
+        tk.Button(bar, text="Stop", width=6, command=self._on_stop).pack(
+            side=tk.LEFT, padx=12
+        )
+
+    def _bump_motor(self, which, delta):
+        l = self.set_speed_l.get()
+        r = self.set_speed_r.get()
+        if self.motors_linked:
+            l += delta
+            r += delta
+        elif which == "L":
+            l += delta
+        else:
+            r += delta
+        self.set_speed_l.set(l)
+        self.set_speed_r.set(r)
+        self.world.set_motor_speeds(l, r)
+
+    def _on_toggle_link(self):
+        self.motors_linked = not self.motors_linked
+        self.link_button.config(
+            text=f"Link: {'ON' if self.motors_linked else 'OFF'}"
+        )
+
+    def _on_stop(self):
+        self.set_speed_l.set(0)
+        self.set_speed_r.set(0)
+        self.world.stop_motors()
+
     def _on_toggle_frame(self):
         new_frame = "lidar" if self.coord_frame.get() == "world" else "world"
         self.coord_frame.set(new_frame)
@@ -88,15 +155,15 @@ class SimUI:
 
     def _on_press(self, e):
         self._drag_start = (e.x, e.y)
-        if self.mode.get() == "lidar":
-            self.world.set_lidar(e.x, e.y)
+        if self.mode.get() == "robot":
+            self.world.set_robot_pose(e.x, e.y)
             self._redraw()
 
     def _on_drag(self, e):
         if self._drag_start is None:
             return
-        if self.mode.get() == "lidar":
-            self.world.set_lidar(e.x, e.y)
+        if self.mode.get() == "robot":
+            self.world.set_robot_pose(e.x, e.y)
             self._redraw()
             return
 
@@ -180,8 +247,82 @@ class SimUI:
                     px, text_y, text=f"({mx:.0f},{my:.0f})",
                     fill="#666", font=("TkDefaultFont", 8), anchor=anchor,
                 )
+        # Robot chassis + wheels (under the rays so the lidar dot stays on top)
+        self._draw_robot()
         # Lidar rays + dot
         self._draw_rays(pose)
+
+    def _local_to_canvas(self, cx_px, cy_px, theta, x_mm, y_mm):
+        """Transform a point in robot-local mm coords to canvas pixels."""
+        x_px = x_mm / self.mm_per_pixel
+        y_px = y_mm / self.mm_per_pixel
+        rx = x_px * math.cos(theta) - y_px * math.sin(theta)
+        ry = x_px * math.sin(theta) + y_px * math.cos(theta)
+        return cx_px + rx, cy_px + ry
+
+    def _draw_robot(self):
+        snap = self.world.robot.get_chassis_snapshot()
+        cx, cy, theta = snap["x_px"], snap["y_px"], snap["theta_rad"]
+
+        # Chassis body: from x=-30mm (rear overhang) to x=CHASSIS_LENGTH_MM,
+        # full width = CHASSIS_WIDTH_MM. Local y axis = robot's right side.
+        rear_overhang = 30
+        half_w = CHASSIS_WIDTH_MM / 2.0
+        corners_local = [
+            (-rear_overhang, -half_w),
+            (CHASSIS_LENGTH_MM, -half_w),
+            (CHASSIS_LENGTH_MM, +half_w),
+            (-rear_overhang, +half_w),
+        ]
+        body_pts = []
+        for x_mm, y_mm in corners_local:
+            px, py = self._local_to_canvas(cx, cy, theta, x_mm, y_mm)
+            body_pts.extend([px, py])
+        self.canvas.create_polygon(
+            body_pts, fill="#e0ecff", outline="#1a73e8", width=2,
+        )
+
+        # Rear driven wheels: at the rear axle (x=0), offset ±WHEELBASE/2
+        # along the local-y axis. Drawn as thin rectangles aligned with the
+        # heading direction (long axis = wheel diameter).
+        wheel_len = WHEEL_DIAMETER_MM
+        wheel_width = 22
+        for side_y in (-WHEELBASE_MM / 2.0, +WHEELBASE_MM / 2.0):
+            wheel_corners = [
+                (-wheel_len / 2.0, side_y - wheel_width / 2.0),
+                (+wheel_len / 2.0, side_y - wheel_width / 2.0),
+                (+wheel_len / 2.0, side_y + wheel_width / 2.0),
+                (-wheel_len / 2.0, side_y + wheel_width / 2.0),
+            ]
+            pts = []
+            for x_mm, y_mm in wheel_corners:
+                px, py = self._local_to_canvas(cx, cy, theta, x_mm, y_mm)
+                pts.extend([px, py])
+            self.canvas.create_polygon(pts, fill="black", outline="black")
+
+        # Front caster: small empty circle at (CHASSIS_LENGTH, 0).
+        caster_diam_mm = 40
+        caster_x_px, caster_y_px = self._local_to_canvas(
+            cx, cy, theta, CHASSIS_LENGTH_MM, 0.0,
+        )
+        r = (caster_diam_mm / 2.0) / self.mm_per_pixel
+        self.canvas.create_oval(
+            caster_x_px - r, caster_y_px - r,
+            caster_x_px + r, caster_y_px + r,
+            fill="white", outline="black", width=2,
+        )
+
+        # Lidar mount marker: small grey dot under the blue lidar dot, at
+        # the lidar offset, so you can see the mounting point even without
+        # rays drawn.
+        lidar_x_px, lidar_y_px = self._local_to_canvas(
+            cx, cy, theta, LIDAR_OFFSET_MM, 0.0,
+        )
+        self.canvas.create_oval(
+            lidar_x_px - 2, lidar_y_px - 2,
+            lidar_x_px + 2, lidar_y_px + 2,
+            fill="#888", outline="",
+        )
 
     def _draw_rays(self, pose):
         lx, ly, heading_deg, _sigma, segs = pose

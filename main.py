@@ -16,7 +16,7 @@ MM_PER_PIXEL = 10.0  # 1 px = 10 mm  ->  arena is 8 m x 6 m
 
 
 def main():
-    world = World(ARENA_W, ARENA_H)
+    world = World(ARENA_W, ARENA_H, MM_PER_PIXEL)
     LidarServer(world, MM_PER_PIXEL).start()
 
     root = tk.Tk()
